@@ -71,7 +71,8 @@ echo "[".date('Y-m-d H:i:s') . "] Writing ".sizeof($titles). " lines to file " .
 
 //Write CSV file
 $fp = fopen($csvFile, 'wb');
-foreach ( $titles as $line ) {
+foreach ($titles as $line)
+{
     $val = explode($csvStringSeparator . $csvSeparator . $csvStringSeparator, $line);
     fputcsv($fp, $val);
 }
