@@ -1,0 +1,7 @@
+.vscode
+.history
+vendor
+test
+*.zip
+*.csv
+entrega*
