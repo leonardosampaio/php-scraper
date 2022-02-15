@@ -1,4 +1,4 @@
-# PHP scrapper
+# PHP scraper
 
 ## Dependencies
 
