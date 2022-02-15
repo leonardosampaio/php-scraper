@@ -3,7 +3,6 @@
 require __DIR__.'/../vendor/autoload.php';
 
 use Symfony\Component\BrowserKit\HttpBrowser;
-use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpClient\HttpClient;
 
 /**
