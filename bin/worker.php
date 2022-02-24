@@ -108,6 +108,7 @@ while ($remainingPages)
             }
         )[0] ?? '';
 
+        //Get images
         $dir = __DIR__.'/../output/'.$folder;
         if (!file_exists($dir) && !mkdir($dir, 0777, true))
         {
