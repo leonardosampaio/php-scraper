@@ -1,6 +1,16 @@
 {
     "baseUrl":      "https://www.clasificadosonline.com",
     "searchUrl":    "/UDREListing.asp?RESPueblos=San+Juan+-+Condado-Miramar&Category=Apartamento&Bedrooms=%25&LowPrice=0&HighPrice=999999999&IncPrecio=1&Area=&Repo=Repo&BtnSearchListing=Listing&redirecturl=%2Fudrelistingmap.asp&Opt=Opt&offset=",
+    "httpUserAgent":    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36",
+    "httpReferer":  "https://www.clasificadosonline.com/",
+
+    "sleepBetweenSearchPagesInSeconds":     0,
+    "sleepBetweenListingsInSeconds":        0,
+    "csvSeparator":                         ",",
+    "csvStringEnclosure":                   "\"",
+    "httpTimeout":                          60,
+    "dateFormat":                           "Y-m-d H:i:s",
+    "csvFileDateFormat":                    "Ymd-His",
 
     "selectors": {
         "searchTitle":                  ".link-blue-color",
@@ -14,7 +24,13 @@
         "listingPrice":                 ".Tah16nounder > span:nth-child(1) > strong:nth-child(1)",
         "listingPhones":                "span.Tahoma14",
         "description":                  ".comment",
-        "moreDescription":              ".morecontent"
+        "moreDescription":              ".morecontent",
+
+        "listingImages":                ".MagicScroll a, .MagicZoom",
+        "listingImageFileRegex":        "/[^\\/]+\\b$/",
+
+        "listingFolder":                "[property~='og:url'][content]",
+        "listingFolderRegex":           "/ID=([0-9]*)/"
     },
 
     "columnTitles": [
@@ -24,14 +40,7 @@
         "Number of bathrooms (3)",
         "The price of listing (4)",
         "Phone number of realtor (5)",
-        "Description (6)"
-    ],
-
-    "sleepBetweenSearchPagesInSeconds":     0,
-    "sleepBetweenListingsInSeconds":        0,
-    "csvSeparator":                         ",",
-    "csvStringEnclosure":                   "\"",
-    "httpTimeout":                          60,
-    "dateFormat":                           "Y-m-d H:i:s",
-    "csvFileDateFormat":                    "Ymd-His"
+        "Description (6)",
+        "Images folder (7)"
+    ]
 }

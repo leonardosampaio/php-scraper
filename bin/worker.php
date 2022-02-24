@@ -42,8 +42,17 @@ while ($remainingPages)
         ($totalPages ? " of " . $totalPages : "") .
         PHP_EOL;
 
-    $client = new HttpBrowser(HttpClient::create(['timeout' => $configuration->httpTimeout]));
-    $searchCrawler = $client->request('GET', $configuration->baseUrl . $configuration->searchUrl . $offset);
+    $httpClient = HttpClient::create(
+        [
+            'timeout' => $configuration->httpTimeout,
+            'headers' => [
+                'user-agent' => $configuration->httpUserAgent,
+                'Referer' => $configuration->httpReferer
+            ]
+        ]
+    );
+    $httpBrowser = new HttpBrowser($httpClient);
+    $searchCrawler = $httpBrowser->request('GET', $configuration->baseUrl . $configuration->searchUrl . $offset);
 
     $links = $searchCrawler->filter($configuration->selectors->searchTitle)->each(
         function ($node){
@@ -56,8 +65,7 @@ while ($remainingPages)
     {
         echo "[".date($configuration->dateFormat) . "] Retrieving listing " . ($k+1) . " of " . sizeof($links) . PHP_EOL;
 
-        $client = new HttpBrowser(HttpClient::create(['timeout' => $configuration->httpTimeout]));
-        $listingCrawler = $client->request('GET', $configuration->baseUrl . $link);
+        $listingCrawler = $httpBrowser->request('GET', $configuration->baseUrl . $link);
 
         $title =        $listingCrawler->filter($configuration->selectors->listingTitle)->text();
         $number =       $listingCrawler->filter($configuration->selectors->listingNumber)->text();
@@ -92,6 +100,62 @@ while ($remainingPages)
             }
         )[0] ?? '';
 
+        $folder = $listingCrawler->filter($configuration->selectors->listingFolder)->each(
+            function ($node) use ($configuration)
+            {
+                preg_match($configuration->selectors->listingFolderRegex, $node->attr('content'), $matches);
+                return $matches[1] ?? '';
+            }
+        )[0] ?? '';
+
+        $dir = __DIR__.'/../output/'.$folder;
+        if (!file_exists($dir) && !mkdir($dir, 0777, true))
+        {
+            $dir = '';
+            echo 'Error: could not create directory "'.$dir.'"' . PHP_EOL;
+        }
+        else
+        {
+            $dir = realpath($dir);
+
+            $listingCrawler->filter($configuration->selectors->listingImages)->each(
+                function ($node) use ($configuration, $httpClient, $dir)
+                {
+                    $href = $node->closest('a')->attr('href');
+    
+                    if(empty($href))
+                    {
+                        echo 'Error: could not find image href' . PHP_EOL;
+                        return;
+                    }
+    
+                    preg_match($configuration->selectors->listingImageFileRegex, $href, $matches);
+                    $filename = $matches[0] ?? '';
+    
+                    if (empty($filename))
+                    {
+                        echo "Error: could not find image filename on $href" . PHP_EOL;
+                        return;
+                    }
+    
+                    $content = $httpClient->request('GET', $href)->getContent();
+    
+                    if (empty($content))
+                    {
+                        echo "Error: could not download image $href" . PHP_EOL;
+                        return;
+                    }
+    
+                    $finalFilename = $dir . '/' . $filename;
+                    if (!file_put_contents($finalFilename, $content))
+                    {
+                        echo "Error: could not save image at $finalFilename" . PHP_EOL;
+                        return;
+                    }
+                }
+            );
+        }
+
         $listings[] = [
             trim($title),
             preg_replace('~\D~', '', $number),
@@ -99,7 +163,8 @@ while ($remainingPages)
             trim(preg_replace('/[^0-9 \/]/', '', $bathrooms)),
             trim($price),
             trim(preg_replace('/[^0-9 ]/', '', implode(' ', $phones))),
-            trim($description . $moreDescription)
+            trim($description . $moreDescription),
+            trim($dir)
         ];
 
         if ($configuration->sleepBetweenListingsInSeconds)
@@ -117,11 +182,16 @@ while ($remainingPages)
     )[0];
 
     //Get pagination values
-    $resultsPerPage = $pagesCurrentSizeTotal[2] - ($pagesCurrentSizeTotal[1]-1);
-    $currentPage = floor($pagesCurrentSizeTotal[2] / $resultsPerPage);
-    $totalPages = ceil($pagesCurrentSizeTotal[3] / $resultsPerPage);
-    $remainingPages = $totalPages && $currentPage ? $totalPages - $currentPage : 0;
-    $offset += $resultsPerPage;
+    $currentPageFirstResult =   $pagesCurrentSizeTotal[1];
+    $currentPageLastResult =    $pagesCurrentSizeTotal[2];
+    $totalListings =            $pagesCurrentSizeTotal[3];
+
+    $resultsPerPage =           $currentPageLastResult - ($currentPageFirstResult-1);
+    $currentPage =              floor($currentPageLastResult / $resultsPerPage);
+    $totalPages =               ($currentPageFirstResult + $resultsPerPage) < $totalListings ?
+                                    ceil($totalListings / $resultsPerPage) : $currentPage;
+    $remainingPages =           $totalPages && $currentPage ? $totalPages - $currentPage : 0;
+    $offset +=                  $resultsPerPage;
 
     if ($configuration->sleepBetweenSearchPagesInSeconds)
     {
