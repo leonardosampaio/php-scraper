@@ -1,0 +1,37 @@
+{
+    "baseUrl":      "https://www.clasificadosonline.com",
+    "searchUrl":    "/UDREListing.asp?RESPueblos=San+Juan+-+Condado-Miramar&Category=Apartamento&Bedrooms=%25&LowPrice=0&HighPrice=999999999&IncPrecio=1&Area=&Repo=Repo&BtnSearchListing=Listing&redirecturl=%2Fudrelistingmap.asp&Opt=Opt&offset=",
+
+    "selectors": {
+        "searchTitle":                  ".link-blue-color",
+        "searchPagesCounterSelector":   "tr td .Tahoma14blacknound",
+        "searchPagesCounterRegex":      "/([0-9]*) al ([0-9]*) de ([0-9]*)/",
+
+        "listingTitle":                 ".Tahoma24nounder > strong:nth-child(1)",
+        "listingNumber":                "a.style7:nth-child(1)",
+        "listingBedrooms":              ".Tahoma14Negro strong",
+        "listingBathrooms":             ".Tahoma14Negro strong",
+        "listingPrice":                 ".Tah16nounder > span:nth-child(1) > strong:nth-child(1)",
+        "listingPhones":                "span.Tahoma14",
+        "description":                  ".comment",
+        "moreDescription":              ".morecontent"
+    },
+
+    "columnTitles": [
+        "Title of listing (1)",
+        "Classificado number (2)",
+        "Number of bedrooms (3)",
+        "Number of bathrooms (3)",
+        "The price of listing (4)",
+        "Phone number of realtor (5)",
+        "Description (6)"
+    ],
+
+    "sleepBetweenSearchPagesInSeconds":     0,
+    "sleepBetweenListingsInSeconds":        0,
+    "csvSeparator":                         ",",
+    "csvStringEnclosure":                   "\"",
+    "httpTimeout":                          60,
+    "dateFormat":                           "Y-m-d H:i:s",
+    "csvFileDateFormat":                    "Ymd-His"
+}

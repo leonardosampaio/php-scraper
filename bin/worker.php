@@ -5,74 +5,140 @@ require __DIR__.'/../vendor/autoload.php';
 use Symfony\Component\BrowserKit\HttpBrowser;
 use Symfony\Component\HttpClient\HttpClient;
 
-/**
- * TODO these values will come from a json configuration file
- */
-//Main url
-$url = 'https://www.clasificadosonline.com/UDREListing.asp?RESPueblos=San+Juan+-+Condado-Miramar&Category=Apartamento&Bedrooms=%25&LowPrice=0&HighPrice=999999999&IncPrecio=1&Area=&Repo=Repo&BtnSearchListing=Listing&redirecturl=%2Fudrelistingmap.asp&Opt=Opt&offset=';
-//Listing title
-$titleSelector = '.link-blue-color';
-//Listing pagination
-$pagesCounterSelector = 'tr td .Tahoma14blacknound';
-//Pagination format
-$pagesCounterRegex = '/([0-9]*) al ([0-9]*) de ([0-9]*)/';
-//Sleep between requests for X seconds
-$sleepInSeconds = 0;
-//Output file format
-$csvFile = __DIR__.'/../output/'.date('Ymd-His').'.csv';
-//Column separator
-$csvSeparator = ';';
-//String separator
-$csvStringSeparator = '"';
-//Replace separators in lines with this
-$csvSeparatorAlternative = "'";
+try
+{
+    //Get configuration
+    $configurationFile = __DIR__.'/../configuration/worker.json';
+    if (!file_exists($configurationFile)) {
+        die('Error: the configuration file "'.$configurationFile.'" does not exist');
+    }
 
-//Get search pages
+    $configuration = json_decode(file_get_contents($configurationFile), false, 512, JSON_THROW_ON_ERROR);
+}
+catch (\JsonException $e) {
+    die('Error: the configuration file "'.$configurationFile.'" is not valid JSON');
+}
+
+//Output file name
+$csvFile = __DIR__.'/../output/'.date($configuration->csvFileDateFormat).'.csv';
+
+$listings = [];
+
+//Optional column titles
+if (!empty($configuration->columnTitles))
+{
+    $listings[0] = $configuration->columnTitles;
+}
+
+//Get search pages using HTML pagination values
 $currentPage = 0;
 $remainingPages = 1;
 $offset = 0;
-$titles = [];
+$totalPages = 0;
+
 while ($remainingPages)
 {
-    echo "[".date('Y-m-d H:i:s') . "] Retrieving page " . ($currentPage+1) . PHP_EOL;
+    echo "[".date($configuration->dateFormat) . "] Retrieving page " . ($currentPage+1) .
+        ($totalPages ? " of " . $totalPages : "") .
+        PHP_EOL;
 
-    $client = new HttpBrowser(HttpClient::create(['timeout' => 60]));
-    $crawler = $client->request('GET', $url . $offset);
+    $client = new HttpBrowser(HttpClient::create(['timeout' => $configuration->httpTimeout]));
+    $searchCrawler = $client->request('GET', $configuration->baseUrl . $configuration->searchUrl . $offset);
 
-    $titles = array_merge($titles, $crawler->filter($titleSelector)->each(
-        function ($node) use ($csvSeparator,$csvSeparatorAlternative) {
-            return str_replace($csvSeparator, $csvSeparatorAlternative, $node->text());
+    $links = $searchCrawler->filter($configuration->selectors->searchTitle)->each(
+        function ($node){
+            return $node->closest('a')->attr('href');
         }
-    ));
+    );
 
-    //TODO Get individual links and scrape them
-    
-    $pagesCurrentSizeTotal = $crawler->filter($pagesCounterSelector)->first()->each(
-        function ($node) use ($pagesCounterRegex) {
-            preg_match($pagesCounterRegex, $node->text(), $match);
+    //Get listings
+    foreach($links as $k => $link)
+    {
+        echo "[".date($configuration->dateFormat) . "] Retrieving listing " . ($k+1) . " of " . sizeof($links) . PHP_EOL;
+
+        $client = new HttpBrowser(HttpClient::create(['timeout' => $configuration->httpTimeout]));
+        $listingCrawler = $client->request('GET', $configuration->baseUrl . $link);
+
+        $title =        $listingCrawler->filter($configuration->selectors->listingTitle)->text();
+        $number =       $listingCrawler->filter($configuration->selectors->listingNumber)->text();
+        $bedrooms =     $listingCrawler->filter($configuration->selectors->listingBedrooms)->eq(0)->text();
+        $bathrooms =    $listingCrawler->filter($configuration->selectors->listingBathrooms)->eq(1)->text();
+
+        //multiple
+        $phones = $listingCrawler->filter($configuration->selectors->listingPhones)->each(
+            function ($node){
+                return $node->text();
+            }
+        ) ?? '';
+        
+        //optional
+        $price = $listingCrawler->filter($configuration->selectors->listingPrice)->each(
+            function ($node){
+                return $node->text();
+            }
+        )[0] ?? '';
+
+        //optional
+        $description = $listingCrawler->filter($configuration->selectors->description)->each(
+            function ($node){
+                return $node->text();
+            }
+        )[0] ?? '';
+
+        //optional
+        $moreDescription = $listingCrawler->filter($configuration->selectors->moreDescription)->each(
+            function ($node){
+                return $node->text();
+            }
+        )[0] ?? '';
+
+        $listings[] = [
+            trim($title),
+            preg_replace('~\D~', '', $number),
+            preg_replace('~\D~', '', $bedrooms),
+            trim(preg_replace('/[^0-9 \/]/', '', $bathrooms)),
+            trim($price),
+            trim(preg_replace('/[^0-9 ]/', '', implode(' ', $phones))),
+            trim($description . $moreDescription)
+        ];
+
+        if ($configuration->sleepBetweenListingsInSeconds)
+        {
+            echo "[".date($configuration->dateFormat) . "] Sleeping for " . $configuration->sleepBetweenListingsInSeconds . " seconds" . PHP_EOL;
+            sleep($configuration->sleepBetweenListingsInSeconds);
+        }
+    }
+
+    $pagesCurrentSizeTotal = $searchCrawler->filter($configuration->selectors->searchPagesCounterSelector)->first()->each(
+        function ($node) use ($configuration) {
+            preg_match($configuration->selectors->searchPagesCounterRegex, $node->text(), $match);
             return isset($match[3]) ? $match : [];
         }
     )[0];
 
+    //Get pagination values
     $resultsPerPage = $pagesCurrentSizeTotal[2] - ($pagesCurrentSizeTotal[1]-1);
     $currentPage = floor($pagesCurrentSizeTotal[2] / $resultsPerPage);
     $totalPages = ceil($pagesCurrentSizeTotal[3] / $resultsPerPage);
     $remainingPages = $totalPages && $currentPage ? $totalPages - $currentPage : 0;
     $offset += $resultsPerPage;
 
-    if ($sleepInSeconds)
+    if ($configuration->sleepBetweenSearchPagesInSeconds)
     {
-        sleep($sleepInSeconds);
+        echo "[".date($configuration->dateFormat) . "] Sleeping for " . $configuration->sleepBetweenSearchPagesInSeconds . " seconds" . PHP_EOL;
+        sleep($configuration->sleepBetweenSearchPagesInSeconds);
     }
 }
 
-echo "[".date('Y-m-d H:i:s') . "] Writing ".sizeof($titles). " lines to file " . $csvFile . PHP_EOL;
+echo "[".date($configuration->dateFormat) . "] Writing ".sizeof($links). " line(s) to file " . $csvFile . PHP_EOL;
 
 //Write CSV file
 $fp = fopen($csvFile, 'wb');
-foreach ($titles as $line)
+foreach ($listings as $listing)
 {
-    $val = explode($csvStringSeparator . $csvSeparator . $csvStringSeparator, $line);
-    fputcsv($fp, $val);
+    fputcsv($fp, $listing, $configuration->csvSeparator, $configuration->csvStringEnclosure);
 }
-fclose($fp);
+
+echo "[".date($configuration->dateFormat) . "] " .
+    (fclose($fp) ? "File written successfully" : "Error writing file") .
+    PHP_EOL;
