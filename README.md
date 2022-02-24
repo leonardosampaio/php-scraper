@@ -4,7 +4,7 @@
 
 `php 7.4+`
 
-`php curl module`
+`php openssl module`
 
 ## Configuration
 
